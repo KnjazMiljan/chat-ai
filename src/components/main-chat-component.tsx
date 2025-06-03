@@ -1,90 +1,87 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, FormEvent } from 'react';
 import { Message } from '../types/message.tsx';
 
 export const MainChatComponent = () => {
-  const [messages, setMessages] = useState([]);
+  const [messages, setMessages] = useState<Message[]>([]);
   const mainChat = useRef(null);
   const [height, setHeight] = useState(0);
 
   const apiEndpoint = import.meta.env.VITE_AI_API_URL ?? 'http://localhost:11434/api/generate';
 
   useEffect(() => {
-    setHeight(mainChat.current.scrollHeight);
+    setHeight((mainChat.current as any).scrollHeight);
   }, []);
 
-  const submitHandler = (e) => {
+  const submitHandler = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    const outputMessage = e.target.elements.message.value;
+    const form = e.currentTarget;
+    const messageElement = form.elements.namedItem('message') as HTMLTextAreaElement;
+    const outputMessage = messageElement.value;
 
     if (!outputMessage.trim()) return;
 
     addMessage(outputMessage);
     fetchData(outputMessage);
 
-    e.target.elements.message.value = '';
+    messageElement.value = '';
   };
 
-  const fetchData = async (outputMessage: string) => {
+  const fetchData = (outputMessage: string) => {
     try {
-      const response = await fetch(apiEndpoint, {
+      fetch(apiEndpoint, {
         method: 'POST',
         body: JSON.stringify({
-          model: 'codellama:13b',
+          // model: 'codellama:13b',
+          model: 'openbuddy/openbuddy-llama3-8b-v21.1-8k:latest',
           prompt: outputMessage,
           stream: false,
         }),
-      });
+      }).then((response) => {
+        const reader = (response.body as any).getReader();
+        let receivedData = '';
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! Status: ${response.status}`);
-      }
-
-      const reader = response.body.getReader();
-      let receivedData = '';
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) {
-          break;
+        while (true) {
+          const { done, value } = reader.read();
+          if (done) {
+            break;
+          }
+          receivedData += new TextDecoder().decode(value);
         }
-        receivedData += new TextDecoder().decode(value);
-      }
 
-      const receivedDataJSON = JSON.parse(receivedData).response.trim();
+        const receivedDataJSON = JSON.parse(receivedData).response.trim();
 
-      setMessages((prevMessages: Message[]): void => [
-        ...prevMessages,
-        {
-          id: prevMessages.length + 1,
-          isAi: true,
-          message: receivedDataJSON,
-          timestamp: '2 min ago',
-        },
-      ]);
+        setMessages((prevMessages) => [
+          ...prevMessages,
+          {
+            id: prevMessages.length + 1,
+            isAi: true,
+            message: receivedDataJSON,
+            timestamp: '2 min ago',
+          },
+        ]);
 
-      setTimeout(() => {
-        setHeight(mainChat.current.scrollHeight);
-      }, 50);
+        setTimeout(() => {
+          setHeight((mainChat.current as any).scrollHeight);
+        }, 50);
+      });
     } catch (error) {
-      console.error(`Error: ${error.message}`);
+      const messageError = error as Error;
       setMessages((prevMessages) => [
         ...prevMessages,
         {
           id: prevMessages.length + 1,
           isAi: true,
-          message: `Sorry, I encountered an error: ${error.message}`,
+          message: `Sorry, I encountered an error: ${messageError.message}`,
           timestamp: '2 min ago',
         },
       ]);
-
-      // Update scroll position after adding error message
       setTimeout(() => {
-        setHeight(mainChat.current.scrollHeight);
+        setHeight((mainChat.current as any).scrollHeight);
       }, 50);
     }
   };
 
-  const addMessage = (message) => {
+  const addMessage = (message: string) => {
     setMessages([
       ...messages,
       {
@@ -96,17 +93,17 @@ export const MainChatComponent = () => {
     ]);
 
     setTimeout(() => {
-      setHeight(mainChat.current.scrollHeight);
+      setHeight((mainChat.current as any).scrollHeight);
     }, 50);
 
-    mainChat.current.scrollTo({
+    (mainChat.current as any).scrollTo({
       top: height,
       behavior: 'smooth',
     });
   };
 
   if (height) {
-    mainChat.current.scrollTo({
+    (mainChat.current as any).scrollTo({
       top: height,
       behavior: 'smooth',
     });
@@ -121,7 +118,7 @@ export const MainChatComponent = () => {
             className='flex flex-col overflow-y-scroll flex-grow h-0 p-4 overflow-auto'
           >
             {messages &&
-              messages.map((message) =>
+              messages.map((message: Message) =>
                 message.isAi ? (
                   <div
                     className='flex mt-2 space-x-3 max-h-screen w-full md:w-3/4'
@@ -159,10 +156,11 @@ export const MainChatComponent = () => {
                 id='message'
                 name='message'
                 rows={4}
-                className='block min-h-20 mr-6 p-2.5 resize-none w-full text-sm text-gray-900 bg-white focus:outline-none rounded-lg border border-gray-300 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500'
+                className='block min-h-20 mr-6 p-2.5 resize-none w-full text-sm text-gray-900 bg-gray-50  focus:outline-none rounded-lg border border-gray-300 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500'
                 placeholder='Type your message...'
                 autoComplete={'off'}
                 autoCorrect={'off'}
+                spellCheck={'false'}
               ></textarea>
               <button
                 className='flex self-center justify-around items-center text-white my-3 bg-blue-400 w-2/4 md:w-2/8'
@@ -171,6 +169,32 @@ export const MainChatComponent = () => {
                 Send
               </button>
             </div>
+            {/*<label htmlFor='chat' className='sr-only'>*/}
+            {/*  Your message*/}
+            {/*</label>*/}
+            {/*<div className='flex items-center px-3 py-2 rounded-lg bg-gray-50 dark:bg-gray-700'>*/}
+            {/*  <textarea*/}
+            {/*    id='chat'*/}
+            {/*    rows={4}*/}
+            {/*    className='block mx-4 p-2.5 w-full text-sm  resize-none text-gray-900 bg-white rounded-lg border focus:outline-none border-gray-300 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-800 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500'*/}
+            {/*    placeholder='Your message...'*/}
+            {/*  ></textarea>*/}
+            {/*  <button*/}
+            {/*    type='submit'*/}
+            {/*    className='inline-flex justify-center p-2 text-blue-600 rounded-full cursor-pointer hover:bg-blue-100 dark:text-blue-500 dark:hover:bg-gray-600'*/}
+            {/*  >*/}
+            {/*    <svg*/}
+            {/*      className='w-5 h-5 rotate-90 rtl:-rotate-90'*/}
+            {/*      aria-hidden='true'*/}
+            {/*      xmlns='http://www.w3.org/2000/svg'*/}
+            {/*      fill='currentColor'*/}
+            {/*      viewBox='0 0 18 20'*/}
+            {/*    >*/}
+            {/*      <path d='m17.914 18.594-8-18a1 1 0 0 0-1.828 0l-8 18a1 1 0 0 0 1.157 1.376L8 18.281V9a1 1 0 0 1 2 0v9.281l6.758 1.689a1 1 0 0 0 1.156-1.376Z' />*/}
+            {/*    </svg>*/}
+            {/*    <span className='sr-only'>Send message</span>*/}
+            {/*  </button>*/}
+            {/*</div>*/}
           </form>
         </div>
       </div>
