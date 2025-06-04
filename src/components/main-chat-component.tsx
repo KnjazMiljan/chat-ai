@@ -7,6 +7,7 @@ export const MainChatComponent = () => {
   const [height, setHeight] = useState(0);
 
   const apiEndpoint = import.meta.env.VITE_AI_API_URL ?? 'http://localhost:11434/api/generate';
+  const model = import.meta.env.VITE_AI_MODEL;
 
   useEffect(() => {
     setHeight((mainChat.current as any).scrollHeight);
@@ -26,61 +27,65 @@ export const MainChatComponent = () => {
     messageElement.value = '';
   };
 
-  const fetchData = (outputMessage: string) => {
+  const fetchData = async (outputMessage: string) => {
     try {
-      fetch(apiEndpoint, {
+      const response = await fetch(apiEndpoint, {
         method: 'POST',
         body: JSON.stringify({
-          // model: 'codellama:13b',
-          model: 'openbuddy/openbuddy-llama3-8b-v21.1-8k:latest',
+          model: model,
           prompt: outputMessage,
           stream: false,
         }),
-      }).then((response) => {
-        const reader = (response.body as any).getReader();
-        let receivedData = '';
-
-        while (true) {
-          const { done, value } = reader.read();
-          if (done) {
-            break;
-          }
-          receivedData += new TextDecoder().decode(value);
-        }
-
-        const receivedDataJSON = JSON.parse(receivedData).response.trim();
-
-        setMessages((prevMessages) => [
-          ...prevMessages,
-          {
-            id: prevMessages.length + 1,
-            isAi: true,
-            message: receivedDataJSON,
-            timestamp: '2 min ago',
-          },
-        ]);
-
-        setTimeout(() => {
-          setHeight((mainChat.current as any).scrollHeight);
-        }, 50);
       });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! Status: ${response.status}`);
+      }
+
+      const reader = (response.body as any).getReader();
+      let receivedData = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) {
+          break;
+        }
+        receivedData += new TextDecoder().decode(value);
+      }
+
+      const receivedDataJSON = JSON.parse(receivedData).response.trim();
+
+      setMessages((prevMessages: Message[]) => [
+        ...prevMessages,
+        {
+          id: prevMessages.length + 1,
+          isAi: true,
+          message: receivedDataJSON,
+          timestamp: '2 min ago',
+        },
+      ]);
+
+      setTimeout(() => {
+        setHeight((mainChat.current as any).scrollHeight);
+      }, 50);
     } catch (error) {
-      const messageError = error as Error;
+      const errorObject = error as Error;
+      console.error(`Error: ${errorObject.message}`);
       setMessages((prevMessages) => [
         ...prevMessages,
         {
           id: prevMessages.length + 1,
           isAi: true,
-          message: `Sorry, I encountered an error: ${messageError.message}`,
+          message: `Sorry, I encountered an error: ${errorObject.message}`,
           timestamp: '2 min ago',
         },
       ]);
+
       setTimeout(() => {
         setHeight((mainChat.current as any).scrollHeight);
       }, 50);
     }
   };
-
   const addMessage = (message: string) => {
     setMessages([
       ...messages,
